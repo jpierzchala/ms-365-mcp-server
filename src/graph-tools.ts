@@ -175,6 +175,19 @@ export function registerGraphTools(
             );
           }
 
+          // Auto-set $top for fetchAllPages to ensure we get all available items
+          if (
+            isMailEndpoint &&
+            params.fetchAllPages === true &&
+            !queryParams['$top'] &&
+            !params.top
+          ) {
+            // Set $top to 999 (maximum allowed by Microsoft Graph API) for mail endpoints
+            // when fetchAllPages is requested but no explicit top limit is provided
+            queryParams['$top'] = '999';
+            logger.info('Auto-applied $top=999 for mail endpoint with fetchAllPages=true');
+          }
+
           for (let [paramName, paramValue] of Object.entries(params)) {
             // Skip pagination control parameter - it's not part of the Microsoft Graph API - I think 🤷
             if (paramName === 'fetchAllPages') {
@@ -358,11 +371,19 @@ export function registerGraphTools(
             // Apply response optimization for LLM consumption
             try {
               const jsonResponse = JSON.parse(responseText);
-              const optimizedResponse = optimizeResponse(
-                jsonResponse,
-                path,
-                effectiveOptimizationConfig
-              );
+
+              // If fetchAllPages is true, increase the collection limit significantly
+              // to avoid truncating the user's explicitly requested full result set
+              let optimizationConfig = effectiveOptimizationConfig;
+              if (params.fetchAllPages === true && isMailEndpoint) {
+                optimizationConfig = {
+                  ...effectiveOptimizationConfig,
+                  maxItemsInCollection: 10000, // Increase limit significantly for fetchAllPages
+                };
+                logger.info('Increased maxItemsInCollection to 10000 for fetchAllPages=true');
+              }
+
+              const optimizedResponse = optimizeResponse(jsonResponse, path, optimizationConfig);
 
               if (optimizedResponse !== jsonResponse) {
                 responseText = JSON.stringify(optimizedResponse, null, 2);

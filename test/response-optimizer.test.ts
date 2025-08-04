@@ -174,5 +174,23 @@ describe('Response Optimizer', () => {
 
       expect(result.value).toHaveLength(DEFAULT_LLM_OPTIMIZATION.maxItemsInCollection);
     });
+
+    it('should allow larger collections when maxItemsInCollection is increased', () => {
+      const largeCollection = {
+        value: Array.from({ length: 100 }, (_, i) => ({
+          id: `msg${i}`,
+          subject: `Message ${i}`,
+        })),
+      };
+
+      const configWithHigherLimit = {
+        ...DEFAULT_LLM_OPTIMIZATION,
+        maxItemsInCollection: 10000, // Higher limit like we use for fetchAllPages
+      };
+
+      const result = optimizeMailCollection(largeCollection, configWithHigherLimit);
+
+      expect(result.value).toHaveLength(100); // Should not be truncated
+    });
   });
 });
