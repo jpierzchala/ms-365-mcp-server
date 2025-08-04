@@ -6,7 +6,7 @@ import {
   optimizeMessageBody,
   optimizeMailMessage,
   optimizeMailCollection,
-  DEFAULT_LLM_OPTIMIZATION
+  DEFAULT_LLM_OPTIMIZATION,
 } from '../src/response-optimizer.js';
 
 describe('Response Optimizer', () => {
@@ -25,6 +25,19 @@ describe('Response Optimizer', () => {
       const html = 'Hello &amp; welcome &quot;friend&quot; &lt;test&gt;';
       const result = stripHtmlTags(html);
       expect(result).toBe('Hello & welcome "friend" <test>');
+    });
+
+    it('should decode numeric HTML entities and remove invisible characters', () => {
+      const html = 'Test &#65279;͏ &#65279;͏ content with invisible chars';
+      const result = stripHtmlTags(html);
+      expect(result).toBe('Test content with invisible chars');
+    });
+
+    it('should handle complex email content', () => {
+      const html =
+        'New posts from Future Processing S.A. &#65279;͏ &#65279;͏ &#65279;͏<br>Future Processing S.A.';
+      const result = stripHtmlTags(html);
+      expect(result).toBe('New posts from Future Processing S.A. \nFuture Processing S.A.');
     });
   });
 
@@ -52,11 +65,11 @@ describe('Response Optimizer', () => {
     it('should optimize HTML body content', () => {
       const body = {
         contentType: 'html',
-        content: '<p>Hello <b>world</b>!</p><img src="data:image/png;base64,abc123"/>'
+        content: '<p>Hello <b>world</b>!</p><img src="data:image/png;base64,abc123"/>',
       };
-      
+
       const result = optimizeMessageBody(body, DEFAULT_LLM_OPTIMIZATION);
-      
+
       expect(result.contentType).toBe('text');
       expect(result.content).toBe('Hello world!\n[IMAGE_REMOVED]');
     });
@@ -65,12 +78,14 @@ describe('Response Optimizer', () => {
       const longContent = 'a'.repeat(3000);
       const body = {
         contentType: 'html',
-        content: `<p>${longContent}</p>`
+        content: `<p>${longContent}</p>`,
       };
-      
+
       const result = optimizeMessageBody(body, DEFAULT_LLM_OPTIMIZATION);
-      
-      expect(result.content.length).toBeLessThanOrEqual(DEFAULT_LLM_OPTIMIZATION.maxHtmlContentSize + 20); // +20 for truncation marker
+
+      expect(result.content.length).toBeLessThanOrEqual(
+        DEFAULT_LLM_OPTIMIZATION.maxHtmlContentSize + 20
+      ); // +20 for truncation marker
       expect(result.content).toContain('...[TRUNCATED]');
     });
   });
@@ -82,32 +97,32 @@ describe('Response Optimizer', () => {
         subject: 'Test Subject',
         body: {
           contentType: 'html',
-          content: '<p>Hello <b>world</b>!</p><img src="data:image/png;base64,abc123"/>'
+          content: '<p>Hello <b>world</b>!</p><img src="data:image/png;base64,abc123"/>',
         },
         toRecipients: [
           {
             emailAddress: {
               name: 'John Doe',
-              address: 'john@example.com'
-            }
-          }
+              address: 'john@example.com',
+            },
+          },
         ],
         conversationId: 'conv-123',
         webLink: 'https://outlook.com/...',
-        changeKey: 'change-123'
+        changeKey: 'change-123',
       };
-      
+
       const result = optimizeMailMessage(message, DEFAULT_LLM_OPTIMIZATION);
-      
+
       expect(result.id).toBe('test-id');
       expect(result.subject).toBe('Test Subject');
       expect(result.body.contentType).toBe('text');
       expect(result.body.content).toBe('Hello world!\n[IMAGE_REMOVED]');
       expect(result.toRecipients[0]).toEqual({
         name: 'John Doe',
-        address: 'john@example.com'
+        address: 'john@example.com',
       });
-      
+
       // Check that unnecessary fields are removed
       expect(result.conversationId).toBeUndefined();
       expect(result.webLink).toBeUndefined();
@@ -124,23 +139,23 @@ describe('Response Optimizer', () => {
             subject: 'Message 1',
             body: {
               contentType: 'html',
-              content: '<p>Content 1</p>'
-            }
+              content: '<p>Content 1</p>',
+            },
           },
           {
             id: 'msg2',
             subject: 'Message 2',
             body: {
               contentType: 'html',
-              content: '<p>Content 2</p>'
-            }
-          }
+              content: '<p>Content 2</p>',
+            },
+          },
         ],
-        '@odata.count': 2
+        '@odata.count': 2,
       };
-      
+
       const result = optimizeMailCollection(collection, DEFAULT_LLM_OPTIMIZATION);
-      
+
       expect(result.value).toHaveLength(2);
       expect(result.value[0].body.contentType).toBe('text');
       expect(result.value[0].body.content).toBe('Content 1');
@@ -149,14 +164,14 @@ describe('Response Optimizer', () => {
 
     it('should limit collection size', () => {
       const largeCollection = {
-        value: Array.from({length: 100}, (_, i) => ({
+        value: Array.from({ length: 100 }, (_, i) => ({
           id: `msg${i}`,
-          subject: `Message ${i}`
-        }))
+          subject: `Message ${i}`,
+        })),
       };
-      
+
       const result = optimizeMailCollection(largeCollection, DEFAULT_LLM_OPTIMIZATION);
-      
+
       expect(result.value).toHaveLength(DEFAULT_LLM_OPTIMIZATION.maxItemsInCollection);
     });
   });

@@ -28,7 +28,7 @@ export const DEFAULT_LLM_OPTIMIZATION: OptimizationConfig = {
   removeInlineAttachments: true, // Remove inline attachments
   mailSelectFields: [
     'id',
-    'subject', 
+    'subject',
     'sender',
     'from',
     'toRecipients',
@@ -39,9 +39,9 @@ export const DEFAULT_LLM_OPTIMIZATION: OptimizationConfig = {
     'importance',
     'isRead',
     'bodyPreview', // Short preview instead of full body
-    'body' // We'll optimize this separately
+    'body', // We'll optimize this separately
   ],
-  maxItemsInCollection: 50 // Limit collections to 50 items
+  maxItemsInCollection: 50, // Limit collections to 50 items
 };
 
 /**
@@ -49,7 +49,7 @@ export const DEFAULT_LLM_OPTIMIZATION: OptimizationConfig = {
  */
 export function stripHtmlTags(html: string): string {
   if (!html) return '';
-  
+
   // Remove HTML tags but preserve line breaks
   let text = html
     .replace(/<br\s*\/?>/gi, '\n')
@@ -63,12 +63,62 @@ export function stripHtmlTags(html: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
 
+  // Decode HTML entities (including numeric ones)
+  text = text
+    .replace(/&#65279;/g, '') // Specific zero-width no-break space entity
+    .replace(/&#(\d+);/g, (match, dec) => {
+      const code = parseInt(dec, 10);
+      // Skip invisible/control characters
+      if (code === 65279 || (code >= 8192 && code <= 8303) || (code >= 8234 && code <= 8238)) {
+        return '';
+      }
+      return String.fromCharCode(code);
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex) => {
+      const code = parseInt(hex, 16);
+      // Skip invisible/control characters
+      if (code === 65279 || (code >= 8192 && code <= 8303) || (code >= 8234 && code <= 8238)) {
+        return '';
+      }
+      return String.fromCharCode(code);
+    })
+    .replace(/&([a-zA-Z][a-zA-Z0-9]*);/g, (match, entity) => {
+      const entities: Record<string, string> = {
+        apos: "'",
+        cent: '¢',
+        pound: '£',
+        yen: '¥',
+        euro: '€',
+        copy: '©',
+        reg: '®',
+        trade: '™',
+        hellip: '...',
+        mdash: '—',
+        ndash: '–',
+        lsquo: "'",
+        rsquo: "'",
+        ldquo: '"',
+        rdquo: '"',
+      };
+      return entities[entity] || match;
+    });
+
+  // Remove invisible Unicode characters and formatting marks
+  text = text
+    .replace(/[\u200B-\u200D\uFEFF]/g, '') // Zero-width characters
+    .replace(/[\u202A-\u202E]/g, '') // Text direction marks
+    .replace(/[\u2060-\u206F]/g, '') // Various invisible characters
+    .replace(/[\uFE00-\uFE0F]/g, '') // Variation selectors
+    .replace(/[\u034F]/g, '') // Combining grapheme joiner
+    .replace(/͏/g, ''); // Additional invisible character
+
   // Clean up extra whitespace and line breaks
   text = text
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .replace(/\n\s*\n/g, '\n\n')
-    .trim();
+    .replace(/^\s+|\s+$/g, '') // Trim start and end
+    .replace(/[ \t]+/g, ' '); // Normalize spaces
 
   return text;
 }
@@ -78,7 +128,7 @@ export function stripHtmlTags(html: string): string {
  */
 export function removeEmbeddedImages(html: string): string {
   if (!html) return html;
-  
+
   // Remove img tags with data: URLs (base64 images)
   return html.replace(/<img[^>]*src\s*=\s*["']data:[^"']*["'][^>]*>/gi, '[IMAGE_REMOVED]');
 }
@@ -88,7 +138,7 @@ export function removeEmbeddedImages(html: string): string {
  */
 export function removeInlineAttachments(html: string): string {
   if (!html) return html;
-  
+
   // Remove img tags with cid: URLs (inline attachments)
   return html.replace(/<img[^>]*src\s*=\s*["']cid:[^"']*["'][^>]*>/gi, '[ATTACHMENT_REMOVED]');
 }
@@ -98,22 +148,22 @@ export function removeInlineAttachments(html: string): string {
  */
 export function optimizeMessageBody(body: any, config: OptimizationConfig): any {
   if (!body || typeof body !== 'object') return body;
-  
+
   let optimizedBody = { ...body };
-  
+
   if (body.content && typeof body.content === 'string') {
     let content = body.content;
-    
+
     // Remove embedded images if configured
     if (config.removeEmbeddedImages) {
       content = removeEmbeddedImages(content);
     }
-    
+
     // Remove inline attachments if configured
     if (config.removeInlineAttachments) {
       content = removeInlineAttachments(content);
     }
-    
+
     // Strip HTML if configured or if content is too long
     if (config.stripHtmlToText || content.length > config.maxHtmlContentSize) {
       if (body.contentType === 'html' || content.includes('<')) {
@@ -121,15 +171,15 @@ export function optimizeMessageBody(body: any, config: OptimizationConfig): any 
         optimizedBody.contentType = 'text';
       }
     }
-    
+
     // Truncate if still too long
     if (content.length > config.maxHtmlContentSize) {
       content = content.substring(0, config.maxHtmlContentSize) + '...[TRUNCATED]';
     }
-    
+
     optimizedBody.content = content;
   }
-  
+
   return optimizedBody;
 }
 
@@ -138,14 +188,14 @@ export function optimizeMessageBody(body: any, config: OptimizationConfig): any 
  */
 export function optimizeMailMessage(message: any, config: OptimizationConfig): any {
   if (!message || typeof message !== 'object') return message;
-  
+
   const optimized = { ...message };
-  
+
   // Optimize body content
   if (message.body) {
     optimized.body = optimizeMessageBody(message.body, config);
   }
-  
+
   // Remove unnecessary fields that take up space
   delete optimized.conversationId;
   delete optimized.conversationIndex;
@@ -156,27 +206,27 @@ export function optimizeMailMessage(message: any, config: OptimizationConfig): a
   delete optimized.inferenceClassification;
   delete optimized.flag;
   delete optimized.categories;
-  
+
   // Simplify recipient objects to just email and name
-  ['toRecipients', 'ccRecipients', 'bccRecipients'].forEach(field => {
+  ['toRecipients', 'ccRecipients', 'bccRecipients'].forEach((field) => {
     if (optimized[field] && Array.isArray(optimized[field])) {
       optimized[field] = optimized[field].map((recipient: any) => ({
         name: recipient.emailAddress?.name,
-        address: recipient.emailAddress?.address
+        address: recipient.emailAddress?.address,
       }));
     }
   });
-  
+
   // Simplify sender and from objects
-  ['sender', 'from'].forEach(field => {
+  ['sender', 'from'].forEach((field) => {
     if (optimized[field]?.emailAddress) {
       optimized[field] = {
         name: optimized[field].emailAddress.name,
-        address: optimized[field].emailAddress.address
+        address: optimized[field].emailAddress.address,
       };
     }
   });
-  
+
   return optimized;
 }
 
@@ -185,26 +235,28 @@ export function optimizeMailMessage(message: any, config: OptimizationConfig): a
  */
 export function optimizeMailCollection(response: any, config: OptimizationConfig): any {
   if (!response || typeof response !== 'object') return response;
-  
+
   const optimized = { ...response };
-  
+
   if (response.value && Array.isArray(response.value)) {
     // Limit number of items
     let items = response.value;
     if (items.length > config.maxItemsInCollection) {
       items = items.slice(0, config.maxItemsInCollection);
-      logger.info(`Collection truncated from ${response.value.length} to ${config.maxItemsInCollection} items`);
+      logger.info(
+        `Collection truncated from ${response.value.length} to ${config.maxItemsInCollection} items`
+      );
     }
-    
+
     // Optimize each message
     optimized.value = items.map((message: any) => optimizeMailMessage(message, config));
-    
+
     // Update count if present
     if (optimized['@odata.count']) {
       optimized['@odata.count'] = optimized.value.length;
     }
   }
-  
+
   return optimized;
 }
 
@@ -219,12 +271,12 @@ export function getOptimizedMailSelect(config: OptimizationConfig): string {
  * Applies response optimization based on endpoint and configuration
  */
 export function optimizeResponse(
-  response: any, 
-  endpoint: string, 
+  response: any,
+  endpoint: string,
   config: OptimizationConfig = DEFAULT_LLM_OPTIMIZATION
 ): any {
   if (!response || typeof response !== 'object') return response;
-  
+
   // Check if this is a mail-related endpoint
   if (endpoint.includes('/messages') || endpoint.includes('mail')) {
     if (response.value && Array.isArray(response.value)) {
@@ -235,6 +287,6 @@ export function optimizeResponse(
       return optimizeMailMessage(response, config);
     }
   }
-  
+
   return response;
 }

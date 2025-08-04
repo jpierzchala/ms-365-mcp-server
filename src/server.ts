@@ -55,29 +55,29 @@ class MicrosoftGraphServer {
     if (shouldRegisterAuthTools) {
       registerAuthTools(this.server, this.authManager);
     }
-    
+
     // Build optimization configuration from CLI options
     const optimizationConfig: Partial<OptimizationConfig> = {};
-    
+
     if (this.options.llmOptimization === false) {
       // Disable optimization
       optimizationConfig.stripHtmlToText = false;
       optimizationConfig.removeEmbeddedImages = false;
       optimizationConfig.removeInlineAttachments = false;
     }
-    
+
     if (this.options.maxContentSize) {
       optimizationConfig.maxHtmlContentSize = parseInt(this.options.maxContentSize, 10);
     }
-    
+
     if (this.options.maxItems) {
       optimizationConfig.maxItemsInCollection = parseInt(this.options.maxItems, 10);
     }
-    
+
     if (this.options.keepHtml) {
       optimizationConfig.stripHtmlToText = false;
     }
-    
+
     registerGraphTools(
       this.server,
       this.graphClient,
