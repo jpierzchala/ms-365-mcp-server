@@ -244,7 +244,25 @@ When running as an MCP server, the following options can be used:
                   Starts Express.js server with MCP endpoint at /mcp
 --enable-auth-tools Enable login/logout tools when using HTTP mode (disabled by default in HTTP mode)
 --enabled-tools <pattern> Filter tools using regex pattern (e.g., "excel|contact" to enable Excel and Contact tools)
+--no-llm-optimization Disable automatic response optimization for LLM agents
+--max-content-size <size> Maximum size of content in characters (default: 2000)
+--max-items <count> Maximum number of items in collections (default: 50)
+--keep-html       Keep HTML formatting instead of converting to plain text
 ```
+
+### LLM Response Optimization
+
+The server automatically optimizes responses for LLM agents to reduce token consumption:
+
+- **HTML to Text Conversion**: Strips HTML tags and formatting while preserving readability
+- **Content Filtering**: Removes base64 embedded images and inline attachments
+- **Field Selection**: Automatically applies `$select` parameters for mail endpoints to return only essential fields
+- **Size Limiting**: Truncates long content and limits collection sizes
+- **Metadata Removal**: Removes unnecessary fields like conversation IDs, web links, etc.
+
+Typical token savings: **60-90% reduction** for HTML emails, **40-60% for text emails**.
+
+See [LLM Optimization Documentation](docs/LLM_OPTIMIZATION.md) for detailed information.
 
 Environment variables:
 

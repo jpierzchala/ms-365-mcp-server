@@ -10,6 +10,7 @@ import { registerGraphTools } from './graph-tools.js';
 import GraphClient from './graph-client.js';
 import AuthManager from './auth.js';
 import { MicrosoftOAuthProvider } from './oauth-provider.js';
+import { OptimizationConfig } from './response-optimizer.js';
 import {
   exchangeCodeForToken,
   microsoftBearerTokenAuthMiddleware,
@@ -54,12 +55,36 @@ class MicrosoftGraphServer {
     if (shouldRegisterAuthTools) {
       registerAuthTools(this.server, this.authManager);
     }
+    
+    // Build optimization configuration from CLI options
+    const optimizationConfig: Partial<OptimizationConfig> = {};
+    
+    if (this.options.llmOptimization === false) {
+      // Disable optimization
+      optimizationConfig.stripHtmlToText = false;
+      optimizationConfig.removeEmbeddedImages = false;
+      optimizationConfig.removeInlineAttachments = false;
+    }
+    
+    if (this.options.maxContentSize) {
+      optimizationConfig.maxHtmlContentSize = parseInt(this.options.maxContentSize, 10);
+    }
+    
+    if (this.options.maxItems) {
+      optimizationConfig.maxItemsInCollection = parseInt(this.options.maxItems, 10);
+    }
+    
+    if (this.options.keepHtml) {
+      optimizationConfig.stripHtmlToText = false;
+    }
+    
     registerGraphTools(
       this.server,
       this.graphClient,
       this.options.readOnly,
       this.options.enabledTools,
-      this.options.orgMode
+      this.options.orgMode,
+      optimizationConfig
     );
   }
 

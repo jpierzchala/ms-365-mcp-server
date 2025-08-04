@@ -39,7 +39,11 @@ program
     'Enable organization/work mode from start (includes Teams, SharePoint, etc.)'
   )
   .option('--work-mode', 'Alias for --org-mode')
-  .option('--force-work-scopes', 'Backwards compatibility alias for --org-mode (deprecated)');
+  .option('--force-work-scopes', 'Backwards compatibility alias for --org-mode (deprecated)')
+  .option('--no-llm-optimization', 'Disable automatic response optimization for LLM agents')
+  .option('--max-content-size <size>', 'Maximum size of content in characters (default: 2000)', '2000')
+  .option('--max-items <count>', 'Maximum number of items in collections (default: 50)', '50')
+  .option('--keep-html', 'Keep HTML formatting instead of converting to plain text');
 
 export interface CommandOptions {
   v?: boolean;
@@ -56,6 +60,10 @@ export interface CommandOptions {
   orgMode?: boolean;
   workMode?: boolean;
   forceWorkScopes?: boolean;
+  llmOptimization?: boolean;
+  maxContentSize?: string;
+  maxItems?: string;
+  keepHtml?: boolean;
 
   [key: string]: unknown;
 }

@@ -6,6 +6,12 @@ import { z } from 'zod';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { 
+  optimizeResponse, 
+  getOptimizedMailSelect, 
+  DEFAULT_LLM_OPTIMIZATION,
+  OptimizationConfig 
+} from './response-optimizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,7 +87,8 @@ export function registerGraphTools(
   graphClient: GraphClient,
   readOnly: boolean = false,
   enabledToolsPattern?: string,
-  orgMode: boolean = false
+  orgMode: boolean = false,
+  optimizationConfig?: Partial<OptimizationConfig>
 ): void {
   let enabledToolsRegex: RegExp | undefined;
   if (enabledToolsPattern) {
@@ -92,6 +99,14 @@ export function registerGraphTools(
       logger.error(`Invalid tool filter regex pattern: ${enabledToolsPattern}. Ignoring filter.`);
     }
   }
+
+  // Merge optimization configuration with defaults
+  const effectiveOptimizationConfig: OptimizationConfig = {
+    ...DEFAULT_LLM_OPTIMIZATION,
+    ...optimizationConfig
+  };
+  
+  logger.info(`Optimization settings: HTML→Text: ${effectiveOptimizationConfig.stripHtmlToText}, MaxSize: ${effectiveOptimizationConfig.maxHtmlContentSize}, MaxItems: ${effectiveOptimizationConfig.maxItemsInCollection}`);
 
   for (const tool of api.endpoints) {
     const endpointConfig = endpointsData.find((e) => e.toolName === tool.alias);
@@ -110,7 +125,7 @@ export function registerGraphTools(
       continue;
     }
 
-    const paramSchema: Record<string, unknown> = {};
+    const paramSchema: Record<string, z.ZodTypeAny> = {};
     if (tool.parameters && tool.parameters.length > 0) {
       for (const param of tool.parameters) {
         if (param.type === 'Body' && param.schema) {
@@ -147,6 +162,15 @@ export function registerGraphTools(
           const queryParams: Record<string, string> = {};
           const headers: Record<string, string> = {};
           let body: unknown = null;
+          
+          // Auto-optimize mail endpoints for LLM consumption
+          const isMailEndpoint = path.includes('/messages') || tool.alias.includes('mail');
+          if (isMailEndpoint && !queryParams['$select'] && !params.select) {
+            // Add optimized field selection for mail messages
+            queryParams['$select'] = getOptimizedMailSelect(effectiveOptimizationConfig);
+            logger.info(`Auto-applied optimized $select for mail endpoint: ${queryParams['$select']}`);
+          }
+          
           for (let [paramName, paramValue] of Object.entries(params)) {
             // Skip pagination control parameter - it's not part of the Microsoft Graph API - I think 🤷
             if (paramName === 'fetchAllPages') {
@@ -220,7 +244,7 @@ export function registerGraphTools(
             path = `${path}${path.includes('?') ? '&' : '?'}${queryString}`;
           }
 
-          const options: { method: string; headers: Record<string, string>; body?: string } = {
+          const options: Record<string, unknown> = {
             method: tool.method.toUpperCase(),
             headers,
           };
@@ -325,10 +349,28 @@ export function registerGraphTools(
 
           // Convert McpResponse to CallToolResult with the correct structure
           const content: ContentItem[] = response.content.map((item) => {
+            let responseText = item.text;
+            
+            // Apply response optimization for LLM consumption
+            try {
+              const jsonResponse = JSON.parse(responseText);
+              const optimizedResponse = optimizeResponse(jsonResponse, path, effectiveOptimizationConfig);
+              
+              if (optimizedResponse !== jsonResponse) {
+                responseText = JSON.stringify(optimizedResponse, null, 2);
+                const originalSize = item.text.length;
+                const optimizedSize = responseText.length;
+                const savings = Math.round(((originalSize - optimizedSize) / originalSize) * 100);
+                logger.info(`Response optimized: ${originalSize} → ${optimizedSize} chars (${savings}% reduction)`);
+              }
+            } catch {
+              // Not JSON, leave as is
+            }
+            
             // GraphClient only returns text content items, so create proper TextContent items
             const textContent: TextContent = {
               type: 'text',
-              text: item.text,
+              text: responseText,
             };
             return textContent;
           });
