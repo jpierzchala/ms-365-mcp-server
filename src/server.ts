@@ -320,75 +320,89 @@ class MicrosoftGraphServer {
 
       // Microsoft Graph MCP endpoints with bearer token auth
       // Handle both GET and POST methods as required by MCP Streamable HTTP specification
-      app.get('/mcp', microsoftBearerTokenAuthMiddleware, async (req: Request & { microsoftAuth?: { accessToken: string; refreshToken: string } }, res: Response) => {
-        try {
-          // Set OAuth tokens in the GraphClient if available
-          if (req.microsoftAuth) {
-            this.graphClient.setOAuthTokens(
-              req.microsoftAuth.accessToken,
-              req.microsoftAuth.refreshToken
-            );
-          }
+      app.get(
+        '/mcp',
+        microsoftBearerTokenAuthMiddleware,
+        async (
+          req: Request & { microsoftAuth?: { accessToken: string; refreshToken: string } },
+          res: Response
+        ) => {
+          try {
+            // Set OAuth tokens in the GraphClient if available
+            if (req.microsoftAuth) {
+              this.graphClient.setOAuthTokens(
+                req.microsoftAuth.accessToken,
+                req.microsoftAuth.refreshToken
+              );
+            }
 
-          const transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: undefined, // Stateless mode
-          });
-
-          res.on('close', () => {
-            transport.close();
-          });
-
-          await this.server!.connect(transport);
-          await transport.handleRequest(req as any, res as any, undefined);
-        } catch (error) {
-          logger.error('Error handling MCP GET request:', error);
-          if (!res.headersSent) {
-            res.status(500).json({
-              jsonrpc: '2.0',
-              error: {
-                code: -32603,
-                message: 'Internal server error',
-              },
-              id: null,
+            const transport = new StreamableHTTPServerTransport({
+              sessionIdGenerator: undefined, // Stateless mode
             });
+
+            res.on('close', () => {
+              transport.close();
+            });
+
+            await this.server!.connect(transport);
+            await transport.handleRequest(req as any, res as any, undefined);
+          } catch (error) {
+            logger.error('Error handling MCP GET request:', error);
+            if (!res.headersSent) {
+              res.status(500).json({
+                jsonrpc: '2.0',
+                error: {
+                  code: -32603,
+                  message: 'Internal server error',
+                },
+                id: null,
+              });
+            }
           }
         }
-      });
+      );
 
-      app.post('/mcp', microsoftBearerTokenAuthMiddleware, async (req: Request & { microsoftAuth?: { accessToken: string; refreshToken: string } }, res: Response) => {
-        try {
-          // Set OAuth tokens in the GraphClient if available
-          if (req.microsoftAuth) {
-            this.graphClient.setOAuthTokens(
-              req.microsoftAuth.accessToken,
-              req.microsoftAuth.refreshToken
-            );
-          }
+      app.post(
+        '/mcp',
+        microsoftBearerTokenAuthMiddleware,
+        async (
+          req: Request & { microsoftAuth?: { accessToken: string; refreshToken: string } },
+          res: Response
+        ) => {
+          try {
+            // Set OAuth tokens in the GraphClient if available
+            if (req.microsoftAuth) {
+              this.graphClient.setOAuthTokens(
+                req.microsoftAuth.accessToken,
+                req.microsoftAuth.refreshToken
+              );
+            }
 
-          const transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: undefined, // Stateless mode
-          });
-
-          res.on('close', () => {
-            transport.close();
-          });
-
-          await this.server!.connect(transport);
-          await transport.handleRequest(req as any, res as any, req.body);
-        } catch (error) {
-          logger.error('Error handling MCP POST request:', error);
-          if (!res.headersSent) {
-            res.status(500).json({
-              jsonrpc: '2.0',
-              error: {
-                code: -32603,
-                message: 'Internal server error',
-              },
-              id: null,
+            const transport = new StreamableHTTPServerTransport({
+              sessionIdGenerator: undefined, // Stateless mode
             });
+
+            res.on('close', () => {
+              transport.close();
+            });
+
+            await this.server!.connect(transport);
+            await transport.handleRequest(req as any, res as any, req.body);
+          } catch (error) {
+            logger.error('Error handling MCP POST request:', error);
+            if (!res.headersSent) {
+              res.status(500).json({
+                jsonrpc: '2.0',
+                error: {
+                  code: -32603,
+                  message: 'Internal server error',
+                },
+                id: null,
+              });
+            }
           }
         }
-      });
+      );
 
       // Health check endpoint
       app.get('/', (req, res) => {
