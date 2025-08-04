@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
-import express from 'express';
+import express, { Request, Response } from 'express';
 import crypto from 'crypto';
 import logger, { enableConsoleLogging } from './logger.js';
 import { registerAuthTools } from './auth-tools.js';
@@ -319,7 +319,8 @@ class MicrosoftGraphServer {
       );
 
       // Microsoft Graph MCP endpoints with bearer token auth
-      app.post('/mcp', microsoftBearerTokenAuthMiddleware, async (req: Request, res) => {
+      // Handle both GET and POST methods as required by MCP Streamable HTTP specification
+      app.get('/mcp', microsoftBearerTokenAuthMiddleware, async (req: Request & { microsoftAuth?: { accessToken: string; refreshToken: string } }, res: Response) => {
         try {
           // Set OAuth tokens in the GraphClient if available
           if (req.microsoftAuth) {
@@ -338,9 +339,44 @@ class MicrosoftGraphServer {
           });
 
           await this.server!.connect(transport);
-          await transport.handleRequest(req, res, req.body);
+          await transport.handleRequest(req as any, res as any, undefined);
         } catch (error) {
-          logger.error('Error handling MCP request:', error);
+          logger.error('Error handling MCP GET request:', error);
+          if (!res.headersSent) {
+            res.status(500).json({
+              jsonrpc: '2.0',
+              error: {
+                code: -32603,
+                message: 'Internal server error',
+              },
+              id: null,
+            });
+          }
+        }
+      });
+
+      app.post('/mcp', microsoftBearerTokenAuthMiddleware, async (req: Request & { microsoftAuth?: { accessToken: string; refreshToken: string } }, res: Response) => {
+        try {
+          // Set OAuth tokens in the GraphClient if available
+          if (req.microsoftAuth) {
+            this.graphClient.setOAuthTokens(
+              req.microsoftAuth.accessToken,
+              req.microsoftAuth.refreshToken
+            );
+          }
+
+          const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: undefined, // Stateless mode
+          });
+
+          res.on('close', () => {
+            transport.close();
+          });
+
+          await this.server!.connect(transport);
+          await transport.handleRequest(req as any, res as any, req.body);
+        } catch (error) {
+          logger.error('Error handling MCP POST request:', error);
           if (!res.headersSent) {
             res.status(500).json({
               jsonrpc: '2.0',
